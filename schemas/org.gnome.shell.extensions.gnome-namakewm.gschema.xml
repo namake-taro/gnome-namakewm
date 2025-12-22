@@ -1,0 +1,336 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="gnome-namakewm">
+  <schema id="org.gnome.shell.extensions.gnome-namakewm"
+          path="/org/gnome/shell/extensions/gnome-namakewm/">
+
+    <!-- Workspace switching keybindings (NamakeWM) -->
+    <!-- Alt+1 = WS0, Alt+2 = WS1, ..., Alt+9 = WS8, Alt+0 = WS9 -->
+    <key name="mmw-switch-ws-0" type="as">
+      <default><![CDATA[['<Alt>1']]]></default>
+      <summary>Switch current monitor to workspace 0</summary>
+      <description>Keybinding to switch the current monitor to workspace 0</description>
+    </key>
+
+    <key name="mmw-switch-ws-1" type="as">
+      <default><![CDATA[['<Alt>2']]]></default>
+      <summary>Switch current monitor to workspace 1</summary>
+      <description>Keybinding to switch the current monitor to workspace 1</description>
+    </key>
+
+    <key name="mmw-switch-ws-2" type="as">
+      <default><![CDATA[['<Alt>3']]]></default>
+      <summary>Switch current monitor to workspace 2</summary>
+      <description>Keybinding to switch the current monitor to workspace 2</description>
+    </key>
+
+    <key name="mmw-switch-ws-3" type="as">
+      <default><![CDATA[['<Alt>4']]]></default>
+      <summary>Switch current monitor to workspace 3</summary>
+      <description>Keybinding to switch the current monitor to workspace 3</description>
+    </key>
+
+    <key name="mmw-switch-ws-4" type="as">
+      <default><![CDATA[['<Alt>5']]]></default>
+      <summary>Switch current monitor to workspace 4</summary>
+      <description>Keybinding to switch the current monitor to workspace 4</description>
+    </key>
+
+    <key name="mmw-switch-ws-5" type="as">
+      <default><![CDATA[['<Alt>6']]]></default>
+      <summary>Switch current monitor to workspace 5</summary>
+      <description>Keybinding to switch the current monitor to workspace 5</description>
+    </key>
+
+    <key name="mmw-switch-ws-6" type="as">
+      <default><![CDATA[['<Alt>7']]]></default>
+      <summary>Switch current monitor to workspace 6</summary>
+      <description>Keybinding to switch the current monitor to workspace 6</description>
+    </key>
+
+    <key name="mmw-switch-ws-7" type="as">
+      <default><![CDATA[['<Alt>8']]]></default>
+      <summary>Switch current monitor to workspace 7</summary>
+      <description>Keybinding to switch the current monitor to workspace 7</description>
+    </key>
+
+    <key name="mmw-switch-ws-8" type="as">
+      <default><![CDATA[['<Alt>9']]]></default>
+      <summary>Switch current monitor to workspace 8</summary>
+      <description>Keybinding to switch the current monitor to workspace 8</description>
+    </key>
+
+    <key name="mmw-switch-ws-9" type="as">
+      <default><![CDATA[['<Alt>0']]]></default>
+      <summary>Switch current monitor to workspace 9</summary>
+      <description>Keybinding to switch the current monitor to workspace 9</description>
+    </key>
+
+    <!-- Window move keybindings -->
+    <!-- Alt+Shift+1 = WS0, Alt+Shift+2 = WS1, ..., Alt+Shift+9 = WS8, Alt+Shift+0 = WS9 -->
+    <key name="mmw-move-ws-0" type="as">
+      <default><![CDATA[['<Alt><Shift>1']]]></default>
+      <summary>Move current window to workspace 0</summary>
+      <description>Keybinding to move the focused window to workspace 0</description>
+    </key>
+
+    <key name="mmw-move-ws-1" type="as">
+      <default><![CDATA[['<Alt><Shift>2']]]></default>
+      <summary>Move current window to workspace 1</summary>
+      <description>Keybinding to move the focused window to workspace 1</description>
+    </key>
+
+    <key name="mmw-move-ws-2" type="as">
+      <default><![CDATA[['<Alt><Shift>3']]]></default>
+      <summary>Move current window to workspace 2</summary>
+      <description>Keybinding to move the focused window to workspace 2</description>
+    </key>
+
+    <key name="mmw-move-ws-3" type="as">
+      <default><![CDATA[['<Alt><Shift>4']]]></default>
+      <summary>Move current window to workspace 3</summary>
+      <description>Keybinding to move the focused window to workspace 3</description>
+    </key>
+
+    <key name="mmw-move-ws-4" type="as">
+      <default><![CDATA[['<Alt><Shift>5']]]></default>
+      <summary>Move current window to workspace 4</summary>
+      <description>Keybinding to move the focused window to workspace 4</description>
+    </key>
+
+    <key name="mmw-move-ws-5" type="as">
+      <default><![CDATA[['<Alt><Shift>6']]]></default>
+      <summary>Move current window to workspace 5</summary>
+      <description>Keybinding to move the focused window to workspace 5</description>
+    </key>
+
+    <key name="mmw-move-ws-6" type="as">
+      <default><![CDATA[['<Alt><Shift>7']]]></default>
+      <summary>Move current window to workspace 6</summary>
+      <description>Keybinding to move the focused window to workspace 6</description>
+    </key>
+
+    <key name="mmw-move-ws-7" type="as">
+      <default><![CDATA[['<Alt><Shift>8']]]></default>
+      <summary>Move current window to workspace 7</summary>
+      <description>Keybinding to move the focused window to workspace 7</description>
+    </key>
+
+    <key name="mmw-move-ws-8" type="as">
+      <default><![CDATA[['<Alt><Shift>9']]]></default>
+      <summary>Move current window to workspace 8</summary>
+      <description>Keybinding to move the focused window to workspace 8</description>
+    </key>
+
+    <key name="mmw-move-ws-9" type="as">
+      <default><![CDATA[['<Alt><Shift>0']]]></default>
+      <summary>Move current window to workspace 9</summary>
+      <description>Keybinding to move the focused window to workspace 9</description>
+    </key>
+
+    <!-- Workspace indicator in panel -->
+    <key name="show-workspace-indicator" type="b">
+      <default>true</default>
+      <summary>Show workspace indicator</summary>
+      <description>Show workspace indicator in the top panel displaying workspace numbers for each monitor</description>
+    </key>
+
+    <!-- Warp pointer to focused window -->
+    <key name="warp-pointer-to-focus" type="b">
+      <default>true</default>
+      <summary>Warp pointer to focused window</summary>
+      <description>When focus changes via keyboard (Alt+Tab, dock, etc.), move pointer to the center of the newly focused window</description>
+    </key>
+
+    <!-- Raise window on cycle focus -->
+    <key name="raise-on-cycle-focus" type="b">
+      <default>true</default>
+      <summary>Raise window on cycle focus</summary>
+      <description>When cycling focus between windows, also raise the window to the top of the stack</description>
+    </key>
+
+    <!-- Modifier key for workspace shortcuts -->
+    <key name="workspace-modifier" type="s">
+      <default>'Alt'</default>
+      <summary>Modifier key for workspace shortcuts</summary>
+      <description>Modifier key used for workspace switching (Mod+1-0) and window moving (Mod+Shift+1-0)</description>
+    </key>
+
+    <!-- Workspace switch mode -->
+    <key name="workspace-switch-mode" type="s">
+      <default>'swap'</default>
+      <summary>Workspace switch mode</summary>
+      <description>When switching to a workspace already shown on another monitor: 'swap' exchanges workspaces between monitors, 'warp' moves pointer to that monitor instead</description>
+    </key>
+
+    <!-- Cycle focus within current workspace -->
+    <key name="mmw-cycle-focus-forward" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Cycle focus forward</summary>
+      <description>Keybinding to cycle focus to the next window in current monitor's workspace</description>
+    </key>
+
+    <key name="mmw-cycle-focus-backward" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Cycle focus backward</summary>
+      <description>Keybinding to cycle focus to the previous window in current monitor's workspace</description>
+    </key>
+
+    <!-- Swap window position within current workspace -->
+    <key name="mmw-swap-window-forward" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Swap window position forward</summary>
+      <description>Keybinding to swap the focused window's position and size with the next window</description>
+    </key>
+
+    <key name="mmw-swap-window-backward" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Swap window position backward</summary>
+      <description>Keybinding to swap the focused window's position and size with the previous window</description>
+    </key>
+
+    <!-- Warp pointer to monitor keybindings (supports up to 8 monitors) -->
+    <key name="mmw-warp-to-monitor-0" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 1</summary>
+      <description>Keybinding to warp pointer to the center of monitor 1 (leftmost)</description>
+    </key>
+
+    <key name="mmw-warp-to-monitor-1" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 2</summary>
+      <description>Keybinding to warp pointer to the center of monitor 2</description>
+    </key>
+
+    <key name="mmw-warp-to-monitor-2" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 3</summary>
+      <description>Keybinding to warp pointer to the center of monitor 3</description>
+    </key>
+
+    <key name="mmw-warp-to-monitor-3" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 4</summary>
+      <description>Keybinding to warp pointer to the center of monitor 4</description>
+    </key>
+
+    <key name="mmw-warp-to-monitor-4" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 5</summary>
+      <description>Keybinding to warp pointer to the center of monitor 5</description>
+    </key>
+
+    <key name="mmw-warp-to-monitor-5" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 6</summary>
+      <description>Keybinding to warp pointer to the center of monitor 6</description>
+    </key>
+
+    <key name="mmw-warp-to-monitor-6" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 7</summary>
+      <description>Keybinding to warp pointer to the center of monitor 7</description>
+    </key>
+
+    <key name="mmw-warp-to-monitor-7" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp pointer to monitor 8</summary>
+      <description>Keybinding to warp pointer to the center of monitor 8</description>
+    </key>
+
+    <!-- Window highlight settings -->
+    <key name="window-highlight-top" type="b">
+      <default>false</default>
+      <summary>Highlight window top edge</summary>
+      <description>Draw a colored line at the top edge of the focused window</description>
+    </key>
+
+    <key name="window-highlight-bottom" type="b">
+      <default>false</default>
+      <summary>Highlight window bottom edge</summary>
+      <description>Draw a colored line at the bottom edge of the focused window</description>
+    </key>
+
+    <key name="window-highlight-left" type="b">
+      <default>false</default>
+      <summary>Highlight window left edge</summary>
+      <description>Draw a colored line at the left edge of the focused window</description>
+    </key>
+
+    <key name="window-highlight-right" type="b">
+      <default>false</default>
+      <summary>Highlight window right edge</summary>
+      <description>Draw a colored line at the right edge of the focused window</description>
+    </key>
+
+    <key name="window-highlight-thickness" type="i">
+      <default>3</default>
+      <summary>Window highlight line thickness</summary>
+      <description>Thickness of the window highlight lines in pixels</description>
+    </key>
+
+    <key name="window-highlight-color" type="s">
+      <default>'#ff0000'</default>
+      <summary>Window highlight color</summary>
+      <description>Color of the window highlight lines in hex format</description>
+    </key>
+
+    <!-- Display highlight settings -->
+    <key name="display-highlight-top" type="b">
+      <default>false</default>
+      <summary>Highlight display top edge</summary>
+      <description>Draw a colored line at the top edge of the current display</description>
+    </key>
+
+    <key name="display-highlight-bottom" type="b">
+      <default>false</default>
+      <summary>Highlight display bottom edge</summary>
+      <description>Draw a colored line at the bottom edge of the current display</description>
+    </key>
+
+    <key name="display-highlight-left" type="b">
+      <default>false</default>
+      <summary>Highlight display left edge</summary>
+      <description>Draw a colored line at the left edge of the current display</description>
+    </key>
+
+    <key name="display-highlight-right" type="b">
+      <default>false</default>
+      <summary>Highlight display right edge</summary>
+      <description>Draw a colored line at the right edge of the current display</description>
+    </key>
+
+    <key name="display-highlight-thickness" type="i">
+      <default>3</default>
+      <summary>Display highlight line thickness</summary>
+      <description>Thickness of the display highlight lines in pixels</description>
+    </key>
+
+    <key name="display-highlight-color" type="s">
+      <default>'#00ff00'</default>
+      <summary>Display highlight color</summary>
+      <description>Color of the display highlight lines in hex format</description>
+    </key>
+
+    <!-- Debug mode -->
+    <key name="debug-mode" type="b">
+      <default>false</default>
+      <summary>Enable debug logging</summary>
+      <description>When enabled, additional debug information will be logged to the journal</description>
+    </key>
+
+    <!-- Popup banner settings -->
+    <key name="show-popup-banner" type="b">
+      <default>true</default>
+      <summary>Show popup banner on workspace/display change</summary>
+      <description>Show a brief popup banner when switching workspaces or moving to a different display</description>
+    </key>
+
+    <!-- Saved system keybindings (for restoration on disable) -->
+    <key name="saved-system-keybindings" type="s">
+      <default>''</default>
+      <summary>Saved system keybindings</summary>
+      <description>JSON string containing the original system keybindings before override</description>
+    </key>
+
+  </schema>
+</schemalist>
