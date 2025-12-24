@@ -460,7 +460,7 @@ class WallpaperGroupRow extends Adw.ActionRow {
             tooltip_text: 'Select image',
         });
         chooseBtn.connect('clicked', () => {
-            this._chooseFile(dialog, imageLabel);
+            this._chooseFile(parentWindow, imageLabel);
         });
 
         const clearBtn = new Gtk.Button({
@@ -563,7 +563,7 @@ class WallpaperGroupRow extends Adw.ActionRow {
         dialog.present(parentWindow);
     }
 
-    _chooseFile(parentDialog, imageLabel) {
+    _chooseFile(parentWindow, imageLabel) {
         const fileDialog = new Gtk.FileDialog({
             title: 'Select Wallpaper Image',
             modal: true,
@@ -595,7 +595,7 @@ class WallpaperGroupRow extends Adw.ActionRow {
             }
         }
 
-        fileDialog.open(parentDialog, null, (dlg, result) => {
+        fileDialog.open(parentWindow, null, (dlg, result) => {
             try {
                 const file = dlg.open_finish(result);
                 if (file) {
