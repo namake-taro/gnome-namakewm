@@ -14,6 +14,7 @@ import St from 'gi://St';
 import { WorkspaceIndicatorManager } from './lib/workspaceIndicator.js';
 import { WindowHighlighter, DisplayHighlighter } from './lib/highlightOverlay.js';
 import { PopupBanner } from './lib/popupBanner.js';
+import { WallpaperOverlayManager } from './lib/wallpaperOverlay.js';
 
 // System keybinding schema
 const WM_KEYBINDINGS_SCHEMA = 'org.gnome.desktop.wm.keybindings';
@@ -71,6 +72,9 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
     // Popup banner for workspace/display changes
     _popupBanner = null;
+
+    // Wallpaper overlay manager for per-workspace wallpapers
+    _wallpaperManager = null;
 
     enable() {
         console.log('[MultiMonitorsWorkspace] Enabling extension...');
@@ -132,6 +136,16 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         // Create popup banner
         this._popupBanner = new PopupBanner(this._settings);
 
+        // Create wallpaper overlay manager (always create for settings monitoring)
+        console.log('[MultiMonitorsWorkspace] Creating WallpaperOverlayManager');
+        this._wallpaperManager = new WallpaperOverlayManager(this._settings);
+        const wallpapersEnabled = this._settings.get_boolean('enable-workspace-wallpapers');
+        console.log(`[MultiMonitorsWorkspace] Workspace wallpapers enabled: ${wallpapersEnabled}`);
+        if (wallpapersEnabled) {
+            this._wallpaperManager.enable();
+            this._wallpaperManager.update(this._monitorWorkspaceMap);
+        }
+
         console.log('[MultiMonitorsWorkspace] Extension enabled successfully');
 
         // Restore saved secondary windows after a delay
@@ -176,6 +190,12 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         if (this._popupBanner) {
             this._popupBanner.destroy();
             this._popupBanner = null;
+        }
+
+        // Destroy wallpaper overlay manager
+        if (this._wallpaperManager) {
+            this._wallpaperManager.destroy();
+            this._wallpaperManager = null;
         }
 
         this._monitorWorkspaceMap.clear();
@@ -1321,6 +1341,11 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             this._indicatorManager.update(this._monitorWorkspaceMap);
         }
 
+        // Update wallpaper overlays
+        if (this._wallpaperManager) {
+            this._wallpaperManager.update(this._monitorWorkspaceMap);
+        }
+
         this._debugDumpState('AFTER External WS Change');
         this._debugLog(`========== END EXTERNAL WS CHANGE ==========\n`);
     }
@@ -1650,6 +1675,11 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         if (this._indicatorManager) {
             this._indicatorManager.update(this._monitorWorkspaceMap);
         }
+
+        // Update wallpaper overlays with restored mappings
+        if (this._wallpaperManager) {
+            this._wallpaperManager.update(this._monitorWorkspaceMap);
+        }
     }
 
     _disconnectSignals() {
@@ -1727,6 +1757,11 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         // Update workspace indicator
         if (this._indicatorManager) {
             this._indicatorManager.update(this._monitorWorkspaceMap);
+        }
+
+        // Update wallpaper overlays
+        if (this._wallpaperManager) {
+            this._wallpaperManager.update(this._monitorWorkspaceMap);
         }
 
         // Show popup banner

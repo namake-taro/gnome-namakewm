@@ -311,6 +311,19 @@
       <description>Color of the display highlight lines in hex format</description>
     </key>
 
+    <!-- Workspace wallpaper settings -->
+    <key name="enable-workspace-wallpapers" type="b">
+      <default>false</default>
+      <summary>Enable per-workspace wallpapers</summary>
+      <description>When enabled, each workspace can have its own wallpaper displayed on all monitors showing that workspace</description>
+    </key>
+
+    <key name="wallpaper-groups" type="s">
+      <default>'[]'</default>
+      <summary>Wallpaper groups configuration</summary>
+      <description>JSON array of wallpaper groups. Each group has path, workspaces, scale, and tile. Example: [{"path":"/path/to/image.jpg","workspaces":[0,2,5],"scale":true,"tile":false}]</description>
+    </key>
+
     <!-- Debug mode -->
     <key name="debug-mode" type="b">
       <default>false</default>

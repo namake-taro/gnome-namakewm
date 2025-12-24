@@ -256,6 +256,362 @@ class ShortcutRow extends Adw.ActionRow {
     }
 });
 
+// Helper class for wallpaper group configuration (simple row with settings dialog)
+const WallpaperGroupRow = GObject.registerClass(
+class WallpaperGroupRow extends Adw.ActionRow {
+    _init(settings, groupIndex, onDelete, onUpdate) {
+        super._init({
+            title: `Wallpaper Group ${groupIndex + 1}`,
+            subtitle: 'Select workspaces and wallpaper',
+        });
+
+        this._settings = settings;
+        this._groupIndex = groupIndex;
+        this._onDelete = onDelete;
+        this._onUpdate = onUpdate;
+
+        // Load current group data
+        this._loadGroupData();
+
+        // Button box
+        const buttonBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 6,
+            valign: Gtk.Align.CENTER,
+        });
+
+        // Settings button (opens dialog)
+        const settingsBtn = new Gtk.Button({
+            icon_name: 'emblem-system-symbolic',
+            tooltip_text: 'Configure',
+        });
+        settingsBtn.connect('clicked', () => this._openSettingsDialog());
+        buttonBox.append(settingsBtn);
+
+        // Delete button
+        const deleteBtn = new Gtk.Button({
+            icon_name: 'user-trash-symbolic',
+            css_classes: ['destructive-action'],
+            tooltip_text: 'Delete',
+        });
+        deleteBtn.connect('clicked', () => {
+            this._onDelete(this._groupIndex);
+        });
+        buttonBox.append(deleteBtn);
+
+        this.add_suffix(buttonBox);
+
+        // Update subtitle with loaded data
+        this._updateSubtitle();
+    }
+
+    _loadGroupData() {
+        try {
+            const groupsJson = this._settings.get_string('wallpaper-groups');
+            const groups = JSON.parse(groupsJson);
+            if (groups[this._groupIndex]) {
+                this._path = groups[this._groupIndex].path || '';
+                this._workspaces = groups[this._groupIndex].workspaces || [];
+                this._scale = groups[this._groupIndex].scale !== false; // default true
+                this._tile = groups[this._groupIndex].tile === true; // default false
+            } else {
+                this._path = '';
+                this._workspaces = [];
+                this._scale = true;
+                this._tile = false;
+            }
+        } catch (e) {
+            this._path = '';
+            this._workspaces = [];
+            this._scale = true;
+            this._tile = false;
+        }
+    }
+
+    _saveGroupData() {
+        try {
+            const groupsJson = this._settings.get_string('wallpaper-groups');
+            const groups = JSON.parse(groupsJson);
+
+            // Ensure array is large enough
+            while (groups.length <= this._groupIndex) {
+                groups.push({ path: '', workspaces: [], scale: true, tile: false });
+            }
+
+            groups[this._groupIndex] = {
+                path: this._path,
+                workspaces: this._workspaces,
+                scale: this._scale,
+                tile: this._tile,
+            };
+
+            this._settings.set_string('wallpaper-groups', JSON.stringify(groups));
+            this._onUpdate();
+        } catch (e) {
+            log(`[NamakeWM] Failed to save wallpaper group: ${e.message}`);
+        }
+    }
+
+    _updateSubtitle() {
+        const wsDisplay = this._workspaces.map(ws => ws === 9 ? 0 : ws + 1).join(', ');
+        const filename = this._path ? this._path.split('/').pop() : 'No image';
+        this.set_subtitle(`WS: ${wsDisplay || 'None'} | ${filename}`);
+    }
+
+    _openSettingsDialog() {
+        const parentWindow = this.get_root();
+
+        const dialog = new Gtk.Window({
+            title: `Wallpaper Group ${this._groupIndex + 1}`,
+            transient_for: parentWindow,
+            modal: true,
+            default_width: 400,
+            default_height: 380,
+        });
+
+        const mainBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 16,
+            margin_top: 16,
+            margin_bottom: 16,
+            margin_start: 16,
+            margin_end: 16,
+        });
+
+        // --- Workspace selection section ---
+        const wsFrame = new Gtk.Frame();
+        const wsSection = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 8,
+            margin_top: 8,
+            margin_bottom: 8,
+            margin_start: 10,
+            margin_end: 10,
+        });
+        const wsTitle = new Gtk.Label({
+            label: 'Workspaces',
+            xalign: 0,
+            css_classes: ['title-4'],
+        });
+        wsSection.append(wsTitle);
+
+        const wsBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 4,
+            homogeneous: true,
+        });
+
+        const wsButtons = [];
+        for (let i = 0; i < 10; i++) {
+            const wsNum = i === 9 ? 0 : i + 1;
+            const btn = new Gtk.ToggleButton({
+                label: String(wsNum),
+            });
+            btn.set_active(this._workspaces.includes(i));
+            btn.connect('toggled', () => {
+                if (btn.get_active()) {
+                    if (!this._workspaces.includes(i)) {
+                        this._workspaces.push(i);
+                        this._workspaces.sort((a, b) => a - b);
+                    }
+                } else {
+                    this._workspaces = this._workspaces.filter(ws => ws !== i);
+                }
+                this._saveGroupData();
+                this._updateSubtitle();
+            });
+            wsButtons.push(btn);
+            wsBox.append(btn);
+        }
+        wsSection.append(wsBox);
+        wsFrame.set_child(wsSection);
+        mainBox.append(wsFrame);
+
+        // --- Image selection section ---
+        const imageFrame = new Gtk.Frame();
+        const imageSection = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 8,
+            margin_top: 8,
+            margin_bottom: 8,
+            margin_start: 10,
+            margin_end: 10,
+        });
+        const imageTitle = new Gtk.Label({
+            label: 'Wallpaper Image',
+            xalign: 0,
+            css_classes: ['title-4'],
+        });
+        imageSection.append(imageTitle);
+
+        const imageBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+        });
+
+        const imageLabel = new Gtk.Label({
+            label: this._path ? this._path.split('/').pop() : 'No image selected',
+            ellipsize: 3, // PANGO_ELLIPSIZE_END
+            hexpand: true,
+            xalign: 0,
+        });
+
+        const chooseBtn = new Gtk.Button({
+            icon_name: 'document-open-symbolic',
+            tooltip_text: 'Select image',
+        });
+        chooseBtn.connect('clicked', () => {
+            this._chooseFile(dialog, imageLabel);
+        });
+
+        const clearBtn = new Gtk.Button({
+            icon_name: 'edit-clear-symbolic',
+            tooltip_text: 'Clear image',
+        });
+        clearBtn.connect('clicked', () => {
+            this._path = '';
+            imageLabel.set_label('No image selected');
+            this._saveGroupData();
+            this._updateSubtitle();
+        });
+
+        imageBox.append(imageLabel);
+        imageBox.append(chooseBtn);
+        imageBox.append(clearBtn);
+        imageSection.append(imageBox);
+        imageFrame.set_child(imageSection);
+        mainBox.append(imageFrame);
+
+        // --- Display options section ---
+        const optionsFrame = new Gtk.Frame();
+        const optionsSection = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 8,
+            margin_top: 8,
+            margin_bottom: 8,
+            margin_start: 10,
+            margin_end: 10,
+        });
+        const optionsTitle = new Gtk.Label({
+            label: 'Display Options',
+            xalign: 0,
+            css_classes: ['title-4'],
+        });
+        optionsSection.append(optionsTitle);
+
+        // Scale switch
+        const scaleBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+        });
+        const scaleLabel = new Gtk.Label({
+            label: 'Scale to Fit',
+            hexpand: true,
+            xalign: 0,
+        });
+        const scaleSwitch = new Gtk.Switch({
+            active: this._scale,
+            valign: Gtk.Align.CENTER,
+        });
+        scaleSwitch.connect('notify::active', () => {
+            this._scale = scaleSwitch.get_active();
+            this._saveGroupData();
+        });
+        scaleBox.append(scaleLabel);
+        scaleBox.append(scaleSwitch);
+        optionsSection.append(scaleBox);
+
+        // Tile switch
+        const tileBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+        });
+        const tileLabel = new Gtk.Label({
+            label: 'Tile',
+            hexpand: true,
+            xalign: 0,
+        });
+        const tileSwitch = new Gtk.Switch({
+            active: this._tile,
+            valign: Gtk.Align.CENTER,
+        });
+        tileSwitch.connect('notify::active', () => {
+            this._tile = tileSwitch.get_active();
+            this._saveGroupData();
+        });
+        tileBox.append(tileLabel);
+        tileBox.append(tileSwitch);
+        optionsSection.append(tileBox);
+
+        optionsFrame.set_child(optionsSection);
+        mainBox.append(optionsFrame);
+
+        // --- Spacer to push close button to bottom ---
+        const spacer = new Gtk.Box({ vexpand: true });
+        mainBox.append(spacer);
+
+        // Close button
+        const closeBtn = new Gtk.Button({
+            label: 'Close',
+            halign: Gtk.Align.END,
+        });
+        closeBtn.connect('clicked', () => {
+            dialog.close();
+        });
+        mainBox.append(closeBtn);
+
+        dialog.set_child(mainBox);
+        dialog.present();
+    }
+
+    _chooseFile(parentDialog, imageLabel) {
+        const fileDialog = new Gtk.FileDialog({
+            title: 'Select Wallpaper Image',
+            modal: true,
+        });
+
+        // Set up file filter for images
+        const filter = new Gtk.FileFilter();
+        filter.set_name('Images');
+        filter.add_mime_type('image/jpeg');
+        filter.add_mime_type('image/png');
+        filter.add_mime_type('image/webp');
+        filter.add_mime_type('image/bmp');
+
+        const filters = new Gio.ListStore({ item_type: Gtk.FileFilter });
+        filters.append(filter);
+        fileDialog.set_filters(filters);
+        fileDialog.set_default_filter(filter);
+
+        // Set initial folder if path exists
+        if (this._path) {
+            try {
+                const file = Gio.File.new_for_path(this._path);
+                const parent = file.get_parent();
+                if (parent) {
+                    fileDialog.set_initial_folder(parent);
+                }
+            } catch (e) {
+                // Ignore
+            }
+        }
+
+        fileDialog.open(parentDialog, null, (dlg, result) => {
+            try {
+                const file = dlg.open_finish(result);
+                if (file) {
+                    this._path = file.get_path();
+                    imageLabel.set_label(this._path.split('/').pop());
+                    this._saveGroupData();
+                    this._updateSubtitle();
+                }
+            } catch (e) {
+                // User cancelled or error
+            }
+        });
+    }
+});
+
 export default class MultiMonitorsWorkspacePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
@@ -614,5 +970,115 @@ export default class MultiMonitorsWorkspacePreferences extends ExtensionPreferen
             'active',
             Gio.SettingsBindFlags.DEFAULT
         );
+
+        // ===========================================
+        // Wallpapers Page
+        // ===========================================
+        const wallpapersPage = new Adw.PreferencesPage({
+            title: 'Wallpapers',
+            icon_name: 'preferences-desktop-wallpaper-symbolic',
+        });
+        window.add(wallpapersPage);
+
+        // Enable wallpapers group
+        const wallpapersEnableGroup = new Adw.PreferencesGroup({
+            title: 'Per-Workspace Wallpapers',
+            description: 'Display different wallpapers for each workspace on all monitors',
+        });
+        wallpapersPage.add(wallpapersEnableGroup);
+
+        const enableWallpapersRow = new Adw.SwitchRow({
+            title: 'Enable Per-Workspace Wallpapers',
+            subtitle: 'Each workspace can have its own wallpaper',
+        });
+        wallpapersEnableGroup.add(enableWallpapersRow);
+
+        settings.bind(
+            'enable-workspace-wallpapers',
+            enableWallpapersRow,
+            'active',
+            Gio.SettingsBindFlags.DEFAULT
+        );
+
+        // Wallpaper groups
+        const wallpaperGroupsContainer = new Adw.PreferencesGroup({
+            title: 'Wallpaper Groups',
+            description: 'Configure wallpapers for specific workspaces. Unassigned workspaces use the system wallpaper.',
+        });
+        wallpapersPage.add(wallpaperGroupsContainer);
+
+        // Track group rows for rebuilding
+        let groupRows = [];
+
+        const rebuildGroupRows = () => {
+            // Remove existing rows
+            for (const row of groupRows) {
+                wallpaperGroupsContainer.remove(row);
+            }
+            groupRows = [];
+
+            // Load groups from settings
+            let groups = [];
+            try {
+                groups = JSON.parse(settings.get_string('wallpaper-groups'));
+            } catch (e) {
+                groups = [];
+            }
+
+            // Create rows for existing groups
+            for (let i = 0; i < groups.length; i++) {
+                const row = new WallpaperGroupRow(
+                    settings,
+                    i,
+                    (index) => deleteGroup(index),
+                    () => {} // onUpdate callback (for future use)
+                );
+                groupRows.push(row);
+                wallpaperGroupsContainer.add(row);
+            }
+        };
+
+        const deleteGroup = (index) => {
+            try {
+                let groups = JSON.parse(settings.get_string('wallpaper-groups'));
+                groups.splice(index, 1);
+                settings.set_string('wallpaper-groups', JSON.stringify(groups));
+                rebuildGroupRows();
+            } catch (e) {
+                log(`[NamakeWM] Failed to delete wallpaper group: ${e.message}`);
+            }
+        };
+
+        const addGroup = () => {
+            try {
+                let groups = JSON.parse(settings.get_string('wallpaper-groups'));
+                groups.push({ path: '', workspaces: [] });
+                settings.set_string('wallpaper-groups', JSON.stringify(groups));
+                rebuildGroupRows();
+            } catch (e) {
+                log(`[NamakeWM] Failed to add wallpaper group: ${e.message}`);
+            }
+        };
+
+        // Initial build
+        rebuildGroupRows();
+
+        // Add group button
+        const addGroupRow = new Adw.ActionRow({
+            title: 'Add Wallpaper Group',
+            subtitle: 'Create a new wallpaper configuration',
+            activatable: true,
+        });
+
+        const addBtn = new Gtk.Button({
+            icon_name: 'list-add-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['suggested-action'],
+        });
+        addBtn.connect('clicked', () => addGroup());
+        addGroupRow.add_suffix(addBtn);
+        addGroupRow.connect('activated', () => addGroup());
+
+        wallpaperGroupsContainer.add(addGroupRow);
     }
 }

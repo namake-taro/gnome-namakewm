@@ -10,6 +10,7 @@ A GNOME Shell extension that enables independent workspace management for each m
 
 - **Independent Workspaces per Monitor**: Each monitor can display a different workspace simultaneously
 - **Workspace Swap**: When switching to a workspace already shown on another monitor, workspaces are swapped between monitors
+- **Per-Workspace Wallpapers**: Set different wallpapers for each workspace, with scaling and tiling options
 - **Workspace Indicator**: Shows current workspace number for each monitor in the top panel
 - **Popup Banner**: Brief notification when switching workspaces or displays
 - **Focus Management**: Automatically focuses windows under the pointer, with focus restoration on workspace switch
@@ -131,6 +132,23 @@ gnome-extensions prefs gnome-namakewm@namake-taro.github.io
 | Display Highlight | Draw lines on current display edges | Off |
 | Line Thickness | Thickness in pixels | 3 |
 | Color | Line color | Red/Green |
+
+### Wallpaper Settings (Wallpapers tab)
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| Enable Per-Workspace Wallpapers | Enable workspace-specific wallpapers | Off |
+| Wallpaper Groups | Configure wallpaper for specific workspaces | - |
+
+#### Wallpaper Group Options
+
+Each wallpaper group allows you to:
+- **Select Workspaces**: Choose which workspaces use this wallpaper (multiple selection)
+- **Choose Image**: Select any image file (JPEG, PNG, WebP, BMP)
+- **Scale to Fit**: Scale image to cover the screen (maintains aspect ratio)
+- **Tile**: Repeat the image to fill the screen (image center aligns with screen center)
+
+When a workspace has no assigned wallpaper, the system wallpaper is displayed.
 
 ## Debugging
 
