@@ -361,13 +361,17 @@ class WallpaperGroupRow extends Adw.ActionRow {
     _openSettingsDialog() {
         const parentWindow = this.get_root();
 
+        // Note: transient_for must be set via method, not constructor (GTK4 requirement)
         const dialog = new Gtk.Window({
             title: `Wallpaper Group ${this._groupIndex + 1}`,
-            transient_for: parentWindow,
             modal: true,
             default_width: 400,
             default_height: 380,
         });
+
+        if (parentWindow) {
+            dialog.set_transient_for(parentWindow);
+        }
 
         const mainBox = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
