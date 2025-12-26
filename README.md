@@ -66,7 +66,7 @@ glib-compile-schemas ~/.local/share/gnome-shell/extensions/gnome-namakewm@namake
 
 4. Restart GNOME Shell
    - **Wayland**: Log out and log back in
-   - **X11**: Press `Alt+F2`, type `r`, press `Enter`
+   - **X11**: Press `Alt+F2`, type `r`, press `Enter` (see [Known Limitations](#known-limitations) if already enabled)
 
 5. Enable the extension
 
@@ -149,6 +149,23 @@ Each wallpaper group allows you to:
 - **Tile**: Repeat the image to fill the screen (image center aligns with screen center)
 
 When a workspace has no assigned wallpaper, the system wallpaper is displayed.
+
+## Known Limitations
+
+### GNOME Shell Restart (Alt+F2 → r)
+
+When restarting GNOME Shell using `Alt+F2` → `r` (X11 only), windows on secondary monitors may not be restored correctly. This is because the extension's `disable()` function is not called before the shell restarts.
+
+**Workaround**: Before restarting GNOME Shell, disable the extension first:
+
+```bash
+gnome-extensions disable gnome-namakewm@namake-taro.github.io
+# Then restart GNOME Shell (Alt+F2 → r)
+# After restart, re-enable the extension
+gnome-extensions enable gnome-namakewm@namake-taro.github.io
+```
+
+Note: Screen lock/unlock works correctly without any workaround.
 
 ## Debugging
 

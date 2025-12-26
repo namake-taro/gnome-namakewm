@@ -48,9 +48,9 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
     // Key: windowId, Value: targetMonitor
     _windowsPendingPlacement = new Map();
 
-    // Save window info before disable (for restore after enable)
-    // Key: windowId, Value: { monitorIndex, relX, relY, width, height }
-    _savedWindowsBeforeDisable = new Map();
+    // Saved mapping before disable (for restore after enable)
+    // Key: monitorIndex, Value: logicalWs
+    _savedMappingBeforeDisable = new Map();
 
     // Track last focused window per workspace (for focus restoration)
     // Key: wsIndex, Value: windowId
@@ -75,6 +75,15 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
     // Wallpaper overlay manager for per-workspace wallpapers
     _wallpaperManager = null;
+
+    // Timer management for defensive cleanup
+    _pendingTimeoutIds = new Set();
+    _pointerRestoreTimeoutIds = [];
+    _focusRestoreTimeoutId = null;
+    _internalSwitchTimeoutId = null;
+    _animationRestoreTimeoutId = null;
+    _restoreWindowsTimeoutId = null;
+    _sessionModeTimeoutId = null;
 
     enable() {
         console.log('[MultiMonitorsWorkspace] Enabling extension...');
@@ -148,12 +157,13 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
         console.log('[MultiMonitorsWorkspace] Extension enabled successfully');
 
-        // Restore saved secondary windows after a delay
+        // Restore secondary windows after a delay
         // This handles re-enable after screen unlock
-        if (this._savedWindowsBeforeDisable && this._savedWindowsBeforeDisable.size > 0) {
-            console.log(`[MultiMonitorsWorkspace] Will restore ${this._savedWindowsBeforeDisable.size} saved windows`);
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-                this._restoreSavedSecondaryWindows();
+        if (this._savedMappingBeforeDisable && this._savedMappingBeforeDisable.size > 0) {
+            console.log('[MultiMonitorsWorkspace] Will restore secondary windows from saved mapping');
+            this._restoreWindowsTimeoutId = this._addManagedTimeout(500, () => {
+                this._restoreWindowsTimeoutId = null;
+                this._restoreSecondaryWindowsFromMapping();
                 return GLib.SOURCE_REMOVE;
             });
         }
@@ -198,11 +208,14 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             this._wallpaperManager = null;
         }
 
-        this._monitorWorkspaceMap.clear();
+        // Clear all managed timeouts before nullifying settings
+        this._clearAllManagedTimeouts();
+
+        // Note: Do NOT clear _monitorWorkspaceMap - it's copied to _savedMappingBeforeDisable for restore
         // Note: Do NOT clear _savedWindowPositions - it's needed for correct window placement after unlock
         this._recentlyProcessedWindows.clear();
         this._windowsPendingPlacement.clear();
-        // Note: Do NOT clear _savedWindowsBeforeDisable - it's needed for restore after enable
+        // Note: Do NOT clear _savedMappingBeforeDisable - it's needed for restore after enable
         // Note: Do NOT clear _lastWindowPerWorkspace - it's useful for focus restoration after unlock
         this._interfaceSettings = null;
         this._wmSettings = null;
@@ -212,57 +225,55 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         console.log('[MultiMonitorsWorkspace] Extension disabled successfully');
     }
 
-    // Save secondary windows and move them to global WS before disable
-    // This removes the STICKY (WS=-1) state that causes issues after screen unlock
+    // Move secondary windows to their logical WS and primary coordinates before disable
+    // On enable(), windows can be retrieved by _getWindowsOnWorkspace(logicalWs)
     _restoreWindowsToLogicalWorkspaces() {
         const nMonitors = global.display.get_n_monitors();
         const primaryMonitor = global.display.get_primary_monitor();
-        const currentGlobalWs = global.workspace_manager.get_active_workspace();
         const primaryGeo = global.display.get_monitor_geometry(primaryMonitor);
 
-        console.log('[MultiMonitorsWorkspace] Saving and moving secondary windows to global WS...');
+        console.log('[MultiMonitorsWorkspace] Moving secondary windows to their logical WS...');
 
-        // Clear previous saved data
-        this._savedWindowsBeforeDisable.clear();
+        // Save current mapping for restore after enable
+        this._savedMappingBeforeDisable.clear();
+        for (const [monitorIndex, wsIndex] of this._monitorWorkspaceMap) {
+            this._savedMappingBeforeDisable.set(monitorIndex, wsIndex);
+        }
 
+        let windowCount = 0;
         for (let monitorIndex = 0; monitorIndex < nMonitors; monitorIndex++) {
-            if (monitorIndex === primaryMonitor) continue; // Skip primary
+            if (monitorIndex === primaryMonitor) continue;
 
             const monitorGeo = global.display.get_monitor_geometry(monitorIndex);
             const windowsOnMonitor = this._getWindowsOnMonitor(monitorIndex);
             const logicalWs = this._monitorWorkspaceMap.get(monitorIndex) ?? 0;
+
+            // Ensure target workspace exists
+            this._ensureWorkspaceExists(logicalWs);
+            const logicalWsObj = global.workspace_manager.get_workspace_by_index(logicalWs);
 
             for (const window of windowsOnMonitor) {
                 const title = window.get_title?.() ?? 'unknown';
                 const rect = window.get_frame_rect();
                 const relX = rect.x - monitorGeo.x;
                 const relY = rect.y - monitorGeo.y;
-                const windowId = this._getWindowId(window);
-
-                // Save window info for restore after enable
-                this._savedWindowsBeforeDisable.set(windowId, {
-                    monitorIndex,
-                    logicalWs,
-                    relX,
-                    relY,
-                    width: rect.width,
-                    height: rect.height,
-                    title
-                });
 
                 // Move to primary coordinates
                 const newX = primaryGeo.x + relX;
                 const newY = primaryGeo.y + relY;
                 window.move_resize_frame(false, newX, newY, rect.width, rect.height);
 
-                // Assign to GLOBAL WS (not logical WS) - this removes STICKY state
-                window.change_workspace(currentGlobalWs);
+                // Assign to logical WS (GNOME's global WS)
+                if (logicalWsObj) {
+                    window.change_workspace(logicalWsObj);
+                }
 
-                console.log(`[MultiMonitorsWorkspace] Saved "${title}" from M${monitorIndex} (WS${logicalWs}) -> primary, global WS`);
+                windowCount++;
+                console.log(`[MultiMonitorsWorkspace] Moved "${title}" from M${monitorIndex} -> primary, WS${logicalWs}`);
             }
         }
 
-        console.log(`[MultiMonitorsWorkspace] Saved ${this._savedWindowsBeforeDisable.size} windows for restore`);
+        console.log(`[MultiMonitorsWorkspace] Moved ${windowCount} windows to logical WS`);
     }
 
     // Update workspace keybinding settings based on modifier key
@@ -740,7 +751,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         if (targetFullscreen) targetWindow.unmake_fullscreen();
 
         // Wait for state changes to take effect, then swap positions
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+        this._addManagedTimeout(50, () => {
             if (focusedWindow.is_destroyed?.() || targetWindow.is_destroyed?.()) {
                 return GLib.SOURCE_REMOVE;
             }
@@ -757,7 +768,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             targetWindow.move_resize_frame(false, currentRect.x, currentRect.y, currentRect.width, currentRect.height);
 
             // Restore states (swapped: focused gets target's state, target gets focused's state)
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            this._addManagedTimeout(50, () => {
                 if (focusedWindow.is_destroyed?.() || targetWindow.is_destroyed?.()) {
                     return GLib.SOURCE_REMOVE;
                 }
@@ -778,7 +789,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             });
 
             // Warp pointer to new position if enabled
-            if (this._settings.get_boolean('warp-pointer-to-focus')) {
+            if (this._settings?.get_boolean('warp-pointer-to-focus')) {
                 const newCenterX = Math.floor(targetRect.x + targetRect.width / 2);
                 const newCenterY = Math.floor(targetRect.y + targetRect.height / 2);
 
@@ -1397,7 +1408,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
         // Mark as processed to avoid duplicates from both signals
         this._recentlyProcessedWindows.add(windowId);
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+        this._addManagedTimeout(1000, () => {
             this._recentlyProcessedWindows.delete(windowId);
             return GLib.SOURCE_REMOVE;
         });
@@ -1412,7 +1423,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         this._windowsPendingPlacement.set(windowId, targetMonitor);
 
         // Delay to let the window initialize its position
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        this._addManagedIdle(() => {
             this._moveWindowToMonitor(window, targetMonitor, windowId);
             return GLib.SOURCE_REMOVE;
         });
@@ -1555,8 +1566,13 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         if (session.currentMode === 'user' || session.parentMode === 'user') {
             this._debugLog('Session mode is user - refreshing secondary windows');
             console.log('[MultiMonitorsWorkspace] Screen unlocked, refreshing secondary windows...');
+            // Cancel any existing session mode timeout
+            if (this._sessionModeTimeoutId) {
+                this._cancelManagedTimeout(this._sessionModeTimeoutId);
+            }
             // Delay to let GNOME's unlock processing complete
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            this._sessionModeTimeoutId = this._addManagedTimeout(500, () => {
+                this._sessionModeTimeoutId = null;
                 this._refreshSecondaryWindows();
                 return GLib.SOURCE_REMOVE;
             });
@@ -1594,7 +1610,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
                 // Delayed re-apply for tiling state preservation
                 const w = window, x = rect.x, y = rect.y, width = rect.width, height = rect.height;
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+                this._addManagedTimeout(50, () => {
                     if (!w.is_destroyed?.()) {
                         w.move_resize_frame(false, x, y, width, height);
                     }
@@ -1608,75 +1624,80 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         console.log('[MultiMonitorsWorkspace] Secondary windows refreshed');
     }
 
-    // Restore windows that were saved before disable() back to their secondary monitors
-    _restoreSavedSecondaryWindows() {
-        if (!this._savedWindowsBeforeDisable || this._savedWindowsBeforeDisable.size === 0) {
-            console.log('[MultiMonitorsWorkspace] No saved windows to restore');
+    // Restore secondary windows from saved mapping after enable()
+    // Windows are retrieved from their logical WS and moved to secondary monitors
+    _restoreSecondaryWindowsFromMapping() {
+        if (!this._savedMappingBeforeDisable || this._savedMappingBeforeDisable.size === 0) {
+            console.log('[MultiMonitorsWorkspace] No saved mapping to restore');
             return;
         }
 
-        console.log(`[MultiMonitorsWorkspace] Restoring ${this._savedWindowsBeforeDisable.size} saved windows...`);
+        const nMonitors = global.display.get_n_monitors();
+        const primaryMonitor = global.display.get_primary_monitor();
+        const primaryGeo = global.display.get_monitor_geometry(primaryMonitor);
         const currentGlobalWs = global.workspace_manager.get_active_workspace();
 
-        for (const [windowId, info] of this._savedWindowsBeforeDisable) {
-            const { monitorIndex, logicalWs, relX, relY, width, height, title } = info;
+        console.log('[MultiMonitorsWorkspace] Restoring secondary windows from mapping...');
 
-            // Find the window by ID
-            const window = this._findWindowById(windowId);
-            if (!window || window.is_destroyed?.()) {
-                console.log(`[MultiMonitorsWorkspace] Window "${title}" not found, skipping`);
-                continue;
-            }
+        // Restore mapping to _monitorWorkspaceMap
+        for (const [monitorIndex, wsIndex] of this._savedMappingBeforeDisable) {
+            this._monitorWorkspaceMap.set(monitorIndex, wsIndex);
+        }
+
+        let windowCount = 0;
+        for (let monitorIndex = 0; monitorIndex < nMonitors; monitorIndex++) {
+            if (monitorIndex === primaryMonitor) continue;
+
+            const logicalWs = this._savedMappingBeforeDisable.get(monitorIndex);
+            if (logicalWs === undefined) continue;
 
             const monitorGeo = global.display.get_monitor_geometry(monitorIndex);
-            if (!monitorGeo) {
-                console.log(`[MultiMonitorsWorkspace] Monitor M${monitorIndex} not found, skipping "${title}"`);
-                continue;
+            if (!monitorGeo) continue;
+
+            // Get windows from their logical WS
+            const windowsOnWs = this._getWindowsOnWorkspace(logicalWs);
+
+            for (const window of windowsOnWs) {
+                const title = window.get_title?.() ?? 'unknown';
+                const rect = window.get_frame_rect();
+
+                // Calculate relative position (window is on primary)
+                const relX = rect.x - primaryGeo.x;
+                const relY = rect.y - primaryGeo.y;
+
+                // Move to secondary monitor
+                const newX = monitorGeo.x + relX;
+                const newY = monitorGeo.y + relY;
+                window.move_resize_frame(false, newX, newY, rect.width, rect.height);
+                window.move_to_monitor(monitorIndex);
+                window.change_workspace(currentGlobalWs);
+
+                // Delayed re-apply for stability
+                const w = window, x = newX, y = newY, width = rect.width, height = rect.height;
+                this._addManagedTimeout(50, () => {
+                    if (!w.is_destroyed?.()) {
+                        w.move_resize_frame(false, x, y, width, height);
+                    }
+                    return GLib.SOURCE_REMOVE;
+                });
+
+                windowCount++;
+                console.log(`[MultiMonitorsWorkspace] Restored "${title}" to M${monitorIndex} at (${newX},${newY})`);
             }
-
-            // Calculate target position on the secondary monitor
-            const newX = monitorGeo.x + relX;
-            const newY = monitorGeo.y + relY;
-
-            // Move window to secondary monitor
-            window.move_resize_frame(false, newX, newY, width, height);
-
-            // Explicitly set monitor assignment (fixes maximize on wrong monitor issue)
-            window.move_to_monitor(monitorIndex);
-
-            // Assign to current global WS (makes it sticky/visible on secondary)
-            window.change_workspace(currentGlobalWs);
-
-            // Delayed re-apply for tiling state preservation and position correction
-            const w = window, x = newX, y = newY, finalW = width, finalH = height;
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                if (!w.is_destroyed?.()) {
-                    w.move_resize_frame(false, x, y, finalW, finalH);
-                }
-                return GLib.SOURCE_REMOVE;
-            });
-
-            console.log(`[MultiMonitorsWorkspace] Restored "${title}" to M${monitorIndex} at (${newX},${newY}) ${width}x${height}`);
         }
 
-        // Update monitor-workspace mappings based on saved info
-        for (const [windowId, info] of this._savedWindowsBeforeDisable) {
-            const { monitorIndex, logicalWs } = info;
-            this._monitorWorkspaceMap.set(monitorIndex, logicalWs);
-        }
-
-        // Clear saved data after restore
-        this._savedWindowsBeforeDisable.clear();
-        console.log('[MultiMonitorsWorkspace] Saved windows restored');
+        // Clear saved mapping
+        this._savedMappingBeforeDisable.clear();
+        console.log(`[MultiMonitorsWorkspace] Restored ${windowCount} windows`);
 
         this._logMappings('After Restore');
 
-        // Update workspace indicator with restored mappings
+        // Update workspace indicator
         if (this._indicatorManager) {
             this._indicatorManager.update(this._monitorWorkspaceMap);
         }
 
-        // Update wallpaper overlays with restored mappings
+        // Update wallpaper overlays
         if (this._wallpaperManager) {
             this._wallpaperManager.update(this._monitorWorkspaceMap);
         }
@@ -1773,9 +1794,14 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         this._restorePointerPosition(savedPointerX, savedPointerY);
 
         // Focus last focused window or window under pointer after workspace switch
+        // Cancel any existing focus restore timeout to avoid conflicts
+        if (this._focusRestoreTimeoutId) {
+            this._cancelManagedTimeout(this._focusRestoreTimeoutId);
+        }
         const focusTargetMonitor = currentMonitor;
         const focusTargetWs = targetWs;
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+        this._focusRestoreTimeoutId = this._addManagedTimeout(200, () => {
+            this._focusRestoreTimeoutId = null;
             const [pointerX, pointerY] = global.get_pointer();
             this._focusLastOrAtPosition(focusTargetMonitor, focusTargetWs, pointerX, pointerY);
 
@@ -1797,20 +1823,25 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
     // Restore mouse pointer to saved position if it has moved
     // Uses delayed execution to handle GNOME's async focus handling
     _restorePointerPosition(savedX, savedY) {
+        // Cancel any existing pointer restore timeouts to avoid conflicts
+        this._clearPointerRestoreTimeouts();
+
         // First immediate check and restore
         this._doPointerRestore(savedX, savedY, 'immediate');
 
         // Then delayed restore to handle GNOME's async focus changes
         // Multiple delays to catch different timing scenarios
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+        const id1 = this._addManagedTimeout(50, () => {
             this._doPointerRestore(savedX, savedY, 'delay-50ms');
             return GLib.SOURCE_REMOVE;
         });
+        this._pointerRestoreTimeoutIds.push(id1);
 
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+        const id2 = this._addManagedTimeout(150, () => {
             this._doPointerRestore(savedX, savedY, 'delay-150ms');
             return GLib.SOURCE_REMOVE;
         });
+        this._pointerRestoreTimeoutIds.push(id2);
     }
 
     // Activate workspace without animation
@@ -1818,11 +1849,18 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         // Set flag to indicate this is an internal switch
         this._isInternalSwitch = true;
 
+        // Cancel any existing internal switch timeout to avoid flag conflicts
+        if (this._internalSwitchTimeoutId) {
+            this._cancelManagedTimeout(this._internalSwitchTimeoutId);
+            this._internalSwitchTimeoutId = null;
+        }
+
         if (!this._interfaceSettings) {
             workspace.activate(global.get_current_time());
             // Reset flag after a short delay (after signal handlers have processed)
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+            this._internalSwitchTimeoutId = this._addManagedTimeout(100, () => {
                 this._isInternalSwitch = false;
+                this._internalSwitchTimeoutId = null;
                 return GLib.SOURCE_REMOVE;
             });
             return;
@@ -1839,17 +1877,23 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
         // Restore animation state after a short delay
         if (wasEnabled) {
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            // Cancel any existing animation restore timeout
+            if (this._animationRestoreTimeoutId) {
+                this._cancelManagedTimeout(this._animationRestoreTimeoutId);
+            }
+            this._animationRestoreTimeoutId = this._addManagedTimeout(50, () => {
                 if (this._interfaceSettings) {
                     this._interfaceSettings.set_boolean('enable-animations', true);
                 }
+                this._animationRestoreTimeoutId = null;
                 return GLib.SOURCE_REMOVE;
             });
         }
 
         // Reset internal switch flag after signal handlers have processed
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        this._internalSwitchTimeoutId = this._addManagedTimeout(100, () => {
             this._isInternalSwitch = false;
+            this._internalSwitchTimeoutId = null;
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -1967,7 +2011,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            this._addManagedTimeout(50, () => {
                 if (!w.is_destroyed?.()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
@@ -2018,7 +2062,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            this._addManagedTimeout(50, () => {
                 if (!w.is_destroyed?.()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
@@ -2323,7 +2367,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            this._addManagedTimeout(50, () => {
                 if (!w.is_destroyed?.()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
@@ -2356,7 +2400,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            this._addManagedTimeout(50, () => {
                 if (!w.is_destroyed?.()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
@@ -2438,6 +2482,92 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             this._osdLabel.destroy();
             this._osdLabel = null;
         }
+    }
+
+    // ========== Timer Management ==========
+
+    // Add a timeout that will be automatically cleaned up on disable()
+    _addManagedTimeout(delay, callback) {
+        const id = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+            this._pendingTimeoutIds.delete(id);
+            if (this._settings === null) {
+                // Extension has been disabled, skip callback
+                return GLib.SOURCE_REMOVE;
+            }
+            return callback();
+        });
+        this._pendingTimeoutIds.add(id);
+        return id;
+    }
+
+    // Add an idle callback that will be automatically cleaned up on disable()
+    _addManagedIdle(callback) {
+        const id = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            this._pendingTimeoutIds.delete(id);
+            if (this._settings === null) {
+                return GLib.SOURCE_REMOVE;
+            }
+            return callback();
+        });
+        this._pendingTimeoutIds.add(id);
+        return id;
+    }
+
+    // Cancel a specific managed timeout
+    _cancelManagedTimeout(id) {
+        if (id && this._pendingTimeoutIds.has(id)) {
+            GLib.source_remove(id);
+            this._pendingTimeoutIds.delete(id);
+        }
+    }
+
+    // Clear all pointer restore timeouts
+    _clearPointerRestoreTimeouts() {
+        for (const id of this._pointerRestoreTimeoutIds) {
+            this._cancelManagedTimeout(id);
+        }
+        this._pointerRestoreTimeoutIds = [];
+    }
+
+    // Clear all managed timeouts (called on disable)
+    _clearAllManagedTimeouts() {
+        // Clear specific tracked timeouts
+        this._clearPointerRestoreTimeouts();
+
+        if (this._focusRestoreTimeoutId) {
+            this._cancelManagedTimeout(this._focusRestoreTimeoutId);
+            this._focusRestoreTimeoutId = null;
+        }
+
+        if (this._internalSwitchTimeoutId) {
+            this._cancelManagedTimeout(this._internalSwitchTimeoutId);
+            this._internalSwitchTimeoutId = null;
+        }
+
+        if (this._animationRestoreTimeoutId) {
+            this._cancelManagedTimeout(this._animationRestoreTimeoutId);
+            this._animationRestoreTimeoutId = null;
+        }
+
+        if (this._restoreWindowsTimeoutId) {
+            this._cancelManagedTimeout(this._restoreWindowsTimeoutId);
+            this._restoreWindowsTimeoutId = null;
+        }
+
+        if (this._sessionModeTimeoutId) {
+            this._cancelManagedTimeout(this._sessionModeTimeoutId);
+            this._sessionModeTimeoutId = null;
+        }
+
+        // Clear all remaining pending timeouts
+        for (const id of this._pendingTimeoutIds) {
+            try {
+                GLib.source_remove(id);
+            } catch (e) {
+                // Ignore errors for already-removed sources
+            }
+        }
+        this._pendingTimeoutIds.clear();
     }
 
     // ========== Debug Logging ==========
