@@ -19,7 +19,10 @@ A GNOME Shell extension that enables independent workspace management for each m
 
 ## Supported Versions
 
-- GNOME Shell 45, 46, 47
+- GNOME Shell 45, 46, 47, 48, 49, 50
+
+Note: GNOME Shell 50 is Wayland-only, so the X11 shell-restart workflow below is
+not available there.
 
 ## Prerequisites
 
@@ -65,8 +68,9 @@ glib-compile-schemas ~/.local/share/gnome-shell/extensions/gnome-namakewm@namake
 ```
 
 4. Restart GNOME Shell
-   - **Wayland**: Log out and log back in
-   - **X11**: Press `Alt+F2`, type `r`, press `Enter` (see [Known Limitations](#known-limitations) if already enabled)
+   - **Wayland** (GNOME 45–49): Log out and log back in
+   - **X11** (GNOME 45–49): Press `Alt+F2`, type `r`, press `Enter` (see [Known Limitations](#known-limitations) if already enabled)
+   - **GNOME 50**: Wayland-only — log out and log back in
 
 5. Enable the extension
 
@@ -154,7 +158,9 @@ When a workspace has no assigned wallpaper, the system wallpaper is displayed.
 
 ### GNOME Shell Restart (Alt+F2 → r)
 
-When restarting GNOME Shell using `Alt+F2` → `r` (X11 only), windows on secondary monitors may not be restored correctly. This is because the extension's `disable()` function is not called before the shell restarts.
+When restarting GNOME Shell using `Alt+F2` → `r` (X11 only, so GNOME 45–49), windows on secondary monitors may not be restored correctly. This is because the extension's `disable()` function is not called before the shell restarts.
+
+This does not apply to GNOME 50, which dropped X11 session support entirely.
 
 **Workaround**: Before restarting GNOME Shell, disable the extension first:
 

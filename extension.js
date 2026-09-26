@@ -83,7 +83,6 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
     _internalSwitchTimeoutId = null;
     _animationRestoreTimeoutId = null;
     _restoreWindowsTimeoutId = null;
-    _sessionModeTimeoutId = null;
 
     enable() {
         console.log('[MultiMonitorsWorkspace] Enabling extension...');
@@ -134,7 +133,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
         // Create workspace indicator in top bar (if enabled in settings)
         if (this._settings.get_boolean('show-workspace-indicator')) {
-            this._indicatorManager = new WorkspaceIndicatorManager();
+            this._indicatorManager = new WorkspaceIndicatorManager(this.metadata.uuid);
             this._indicatorManager.create(this._monitorWorkspaceMap);
         }
 
@@ -735,8 +734,11 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         const targetWindow = windows[targetIndex];
 
         // Save maximized/fullscreen states (to swap them)
-        const currentMaximized = focusedWindow.get_maximized();
-        const targetMaximized = targetWindow.get_maximized();
+        // is_maximized() since mutter 49; get_maximized() was removed. Both the
+        // getter and maximize()/unmaximize() lost their MetaMaximizeFlags
+        // parameter, so these are plain booleans now.
+        const currentMaximized = focusedWindow.is_maximized();
+        const targetMaximized = targetWindow.is_maximized();
         const currentFullscreen = focusedWindow.is_fullscreen();
         const targetFullscreen = targetWindow.is_fullscreen();
 
@@ -745,14 +747,14 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         this._debugLog(`  Target maximized: ${targetMaximized}, fullscreen: ${targetFullscreen}`);
 
         // Unmaximize/unfullscreen before moving
-        if (currentMaximized) focusedWindow.unmaximize(currentMaximized);
-        if (targetMaximized) targetWindow.unmaximize(targetMaximized);
+        if (currentMaximized) focusedWindow.unmaximize();
+        if (targetMaximized) targetWindow.unmaximize();
         if (currentFullscreen) focusedWindow.unmake_fullscreen();
         if (targetFullscreen) targetWindow.unmake_fullscreen();
 
         // Wait for state changes to take effect, then swap positions
         this._addManagedTimeout(50, () => {
-            if (focusedWindow.is_destroyed?.() || targetWindow.is_destroyed?.()) {
+            if (!focusedWindow.is_alive() || !targetWindow.is_alive()) {
                 return GLib.SOURCE_REMOVE;
             }
 
@@ -769,18 +771,18 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
             // Restore states (swapped: focused gets target's state, target gets focused's state)
             this._addManagedTimeout(50, () => {
-                if (focusedWindow.is_destroyed?.() || targetWindow.is_destroyed?.()) {
+                if (!focusedWindow.is_alive() || !targetWindow.is_alive()) {
                     return GLib.SOURCE_REMOVE;
                 }
 
                 // Apply swapped states
-                if (targetMaximized) focusedWindow.maximize(targetMaximized);
-                if (currentMaximized) targetWindow.maximize(currentMaximized);
+                if (targetMaximized) focusedWindow.maximize();
+                if (currentMaximized) targetWindow.maximize();
                 if (targetFullscreen) focusedWindow.make_fullscreen();
                 if (currentFullscreen) targetWindow.make_fullscreen();
 
                 // Re-focus the originally focused window to prevent "ready" notification
-                if (!focusedWindow.is_destroyed?.()) {
+                if (focusedWindow.is_alive()) {
                     focusedWindow.focus(global.get_current_time());
                 }
 
@@ -858,7 +860,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         if (lastWindowId) {
             // Try to find the saved window
             const window = this._findWindowById(lastWindowId);
-            if (window && !window.is_destroyed?.()) {
+            if (window && window.is_alive()) {
                 // Verify the window is on the correct monitor
                 const windowMonitor = this._getWindowMonitor(window);
                 // Verify the window is visible on the current workspace
@@ -958,7 +960,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         if (lastWindowId) {
             // Try to find the saved window
             const window = this._findWindowById(lastWindowId);
-            if (window && !window.is_destroyed?.()) {
+            if (window && window.is_alive()) {
                 // Verify the window is on the correct monitor
                 const windowMonitor = this._getWindowMonitor(window);
                 // Verify the window is visible on the current workspace
@@ -988,17 +990,9 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
     }
 
     // Find a window by its ID
-    _findWindowById(windowId) {
-        const actors = global.get_window_actors();
-        for (const actor of actors) {
-            const window = actor.get_meta_window();
-            if (!window) continue;
-            if (this._getWindowId(window) === windowId) {
-                return window;
-            }
-        }
-        return null;
-    }
+    // NOTE: a second, byte-identical _findWindowById used to exist further down
+    // in this class and shadowed this one. Only the surviving definition below
+    // (next to _getWindowId) is kept.
 
     // Unfocus all windows - used when moving to empty monitor
     _unfocusAllWindows() {
@@ -1155,7 +1149,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             if (showIndicator) {
                 // Create indicator if not exists
                 if (!this._indicatorManager) {
-                    this._indicatorManager = new WorkspaceIndicatorManager();
+                    this._indicatorManager = new WorkspaceIndicatorManager(this.metadata.uuid);
                     this._indicatorManager.create(this._monitorWorkspaceMap);
                 }
             } else {
@@ -1196,11 +1190,13 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         });
         this._signalIds.push({ obj: global.window_manager, id: id4 });
 
-        // Listen for session mode changes (screen lock/unlock)
-        const id5 = Main.sessionMode.connect('updated', (session) => {
-            this._onSessionModeChanged(session);
-        });
-        this._signalIds.push({ obj: Main.sessionMode, id: id5 });
+        // NOTE: a Main.sessionMode 'updated' handler used to be connected here.
+        // It was dead code: metadata.json declares no "session-modes", so GNOME
+        // defaults to ['user'] and disables the extension the moment the screen
+        // locks -- the user -> unlock-dialog transition can never be observed
+        // from a running extension. Window restoration on unlock is handled by
+        // the disable()/enable() cycle in _continueEnable() instead
+        // (_restoreWindowsTimeoutId -> _restoreSecondaryWindowsFromMapping).
 
         // Listen for focus window changes (for pointer warp feature)
         const focusId = global.display.connect('notify::focus-window', () => {
@@ -1431,7 +1427,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
     // Move window to a specific monitor (used for new window placement)
     _moveWindowToMonitor(window, targetMonitor, windowId = null) {
-        if (!window || window.is_destroyed?.()) {
+        if (!window || !window.is_alive()) {
             if (windowId) this._windowsPendingPlacement.delete(windowId);
             return;
         }
@@ -1541,7 +1537,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         }
 
         // Focus the newly created window
-        if (window && !window.is_destroyed?.()) {
+        if (window && window.is_alive()) {
             const title = window.get_title?.() ?? 'unknown';
             window.activate(global.get_current_time());
             this._debugLog(`NEW WINDOW: Focused "${title}"`);
@@ -1554,74 +1550,6 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
 
             this._debugLog(`NEW WINDOW: Warped pointer to (${warpX},${warpY})`);
         }
-    }
-
-    // Handle session mode changes (screen lock/unlock)
-    _onSessionModeChanged(session) {
-        // Log all session mode changes for debugging
-        console.log(`[MultiMonitorsWorkspace] Session mode changed: currentMode=${session.currentMode}, parentMode=${session.parentMode}`);
-        this._debugLog(`Session mode changed: currentMode=${session.currentMode}, parentMode=${session.parentMode}`);
-
-        // user mode = normal desktop (unlocked)
-        if (session.currentMode === 'user' || session.parentMode === 'user') {
-            this._debugLog('Session mode is user - refreshing secondary windows');
-            console.log('[MultiMonitorsWorkspace] Screen unlocked, refreshing secondary windows...');
-            // Cancel any existing session mode timeout
-            if (this._sessionModeTimeoutId) {
-                this._cancelManagedTimeout(this._sessionModeTimeoutId);
-            }
-            // Delay to let GNOME's unlock processing complete
-            this._sessionModeTimeoutId = this._addManagedTimeout(500, () => {
-                this._sessionModeTimeoutId = null;
-                this._refreshSecondaryWindows();
-                return GLib.SOURCE_REMOVE;
-            });
-        }
-    }
-
-    // Refresh windows on secondary monitors after screen unlock
-    // Re-applies workspace membership and position/size to fix any inconsistencies
-    _refreshSecondaryWindows() {
-        const nMonitors = global.display.get_n_monitors();
-        const primaryMonitor = global.display.get_primary_monitor();
-        const currentGlobalWs = global.workspace_manager.get_active_workspace();
-
-        this._debugLog('Refreshing secondary monitor windows...');
-
-        for (let monitorIndex = 0; monitorIndex < nMonitors; monitorIndex++) {
-            if (monitorIndex === primaryMonitor) continue;
-
-            const logicalWs = this._monitorWorkspaceMap.get(monitorIndex);
-            if (logicalWs === undefined) continue;
-
-            const windowsOnMonitor = this._getWindowsOnMonitor(monitorIndex);
-            this._debugLog(`  M${monitorIndex} (WS${logicalWs}): ${windowsOnMonitor.length} windows`);
-
-            for (const window of windowsOnMonitor) {
-                const title = window.get_title?.() ?? 'unknown';
-                const shortTitle = title.length > 20 ? title.slice(0, 20) + '...' : title;
-                const rect = window.get_frame_rect();
-
-                // Ensure window is on global WS (makes it visible/sticky on secondary)
-                window.change_workspace(currentGlobalWs);
-
-                // Re-apply position and size
-                window.move_resize_frame(false, rect.x, rect.y, rect.width, rect.height);
-
-                // Delayed re-apply for tiling state preservation
-                const w = window, x = rect.x, y = rect.y, width = rect.width, height = rect.height;
-                this._addManagedTimeout(50, () => {
-                    if (!w.is_destroyed?.()) {
-                        w.move_resize_frame(false, x, y, width, height);
-                    }
-                    return GLib.SOURCE_REMOVE;
-                });
-
-                this._debugLog(`    "${shortTitle}" refreshed at (${rect.x},${rect.y}) ${rect.width}x${rect.height}`);
-            }
-        }
-
-        console.log('[MultiMonitorsWorkspace] Secondary windows refreshed');
     }
 
     // Restore secondary windows from saved mapping after enable()
@@ -1675,7 +1603,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
                 // Delayed re-apply for stability
                 const w = window, x = newX, y = newY, width = rect.width, height = rect.height;
                 this._addManagedTimeout(50, () => {
-                    if (!w.is_destroyed?.()) {
+                    if (w.is_alive()) {
                         w.move_resize_frame(false, x, y, width, height);
                     }
                     return GLib.SOURCE_REMOVE;
@@ -2012,7 +1940,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
             this._addManagedTimeout(50, () => {
-                if (!w.is_destroyed?.()) {
+                if (w.is_alive()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
                 return GLib.SOURCE_REMOVE;
@@ -2063,7 +1991,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
             this._addManagedTimeout(50, () => {
-                if (!w.is_destroyed?.()) {
+                if (w.is_alive()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
                 return GLib.SOURCE_REMOVE;
@@ -2368,7 +2296,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
             this._addManagedTimeout(50, () => {
-                if (!w.is_destroyed?.()) {
+                if (w.is_alive()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
                 return GLib.SOURCE_REMOVE;
@@ -2401,7 +2329,7 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
             // Re-apply size after a short delay (GNOME may reset size when untiling)
             const w = window, finalW = width, finalH = height, finalX = newX, finalY = newY;
             this._addManagedTimeout(50, () => {
-                if (!w.is_destroyed?.()) {
+                if (w.is_alive()) {
                     w.move_resize_frame(false, finalX, finalY, finalW, finalH);
                 }
                 return GLib.SOURCE_REMOVE;
@@ -2552,11 +2480,6 @@ export default class MultiMonitorsWorkspaceExtension extends Extension {
         if (this._restoreWindowsTimeoutId) {
             this._cancelManagedTimeout(this._restoreWindowsTimeoutId);
             this._restoreWindowsTimeoutId = null;
-        }
-
-        if (this._sessionModeTimeoutId) {
-            this._cancelManagedTimeout(this._sessionModeTimeoutId);
-            this._sessionModeTimeoutId = null;
         }
 
         // Clear all remaining pending timeouts

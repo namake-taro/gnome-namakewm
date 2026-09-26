@@ -6,6 +6,7 @@ import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import Gdk from 'gi://Gdk';
 import GObject from 'gi://GObject';
+import Pango from 'gi://Pango';
 
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -60,12 +61,6 @@ class ShortcutRow extends Adw.ActionRow {
         box.append(this._clearButton);
 
         this.add_suffix(box);
-
-        // Key capture controller
-        this._keyController = new Gtk.EventControllerKey();
-        this._keyController.connect('key-pressed', (controller, keyval, keycode, state) => {
-            return this._onKeyPressed(keyval, keycode, state);
-        });
     }
 
     _updateLabel() {
@@ -249,10 +244,6 @@ class ShortcutRow extends Adw.ActionRow {
     _clearShortcut() {
         this._settings.set_strv(this._key, []);
         this._updateLabel();
-    }
-
-    _onKeyPressed(keyval, keycode, state) {
-        return Gdk.EVENT_PROPAGATE;
     }
 });
 
@@ -450,7 +441,7 @@ class WallpaperGroupRow extends Adw.ActionRow {
 
         const imageLabel = new Gtk.Label({
             label: this._path ? this._path.split('/').pop() : 'No image selected',
-            ellipsize: 3, // PANGO_ELLIPSIZE_END
+            ellipsize: Pango.EllipsizeMode.END,
             hexpand: true,
             xalign: 0,
         });
