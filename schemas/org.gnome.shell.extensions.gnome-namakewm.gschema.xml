@@ -134,11 +134,32 @@
       <description>Show workspace indicator in the top panel displaying workspace numbers for each monitor</description>
     </key>
 
+    <!-- Force the panel indicator into a single row -->
+    <key name="flat-panel-indicator" type="b">
+      <default>true</default>
+      <summary>Flatten the panel indicator into a single row</summary>
+      <description>Show all monitors in one horizontal row, ordered left to right. When disabled the indicator is grouped into rows by vertical position, which stacks monitors on different heights - for example a portrait monitor next to landscape ones - into several panel rows</description>
+    </key>
+
     <!-- Warp pointer to focused window -->
     <key name="warp-pointer-to-focus" type="b">
       <default>true</default>
       <summary>Warp pointer to focused window</summary>
       <description>When focus changes via keyboard (Alt+Tab, dock, etc.), move pointer to the center of the newly focused window</description>
+    </key>
+
+    <!-- Window focus follows the mouse pointer -->
+    <key name="focus-follows-mouse" type="b">
+      <default>false</default>
+      <summary>Window focus follows the mouse</summary>
+      <description>When enabled, hovering a window focuses it, without having to click. Switches Mutter's own focus-mode between 'sloppy' and 'click'; the previous value is restored when the extension is disabled</description>
+    </key>
+
+    <!-- Mutter focus-mode value to put back when disabling -->
+    <key name="saved-focus-mode" type="s">
+      <default>''</default>
+      <summary>Previously saved Mutter focus mode</summary>
+      <description>Internal: the org.gnome.desktop.wm.preferences focus-mode value that was active before this extension changed it, so it can be restored on disable</description>
     </key>
 
     <!-- Raise window on cycle focus -->
@@ -160,6 +181,27 @@
       <default>'swap'</default>
       <summary>Workspace switch mode</summary>
       <description>When switching to a workspace already shown on another monitor: 'swap' exchanges workspaces between monitors, 'warp' moves pointer to that monitor instead</description>
+    </key>
+
+    <!-- Which workspace each monitor shows after login -->
+    <key name="monitor-workspace-map" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Workspace shown on each monitor at startup</summary>
+      <description>JSON array of {"monitor":N,"workspace":N} entries defining which workspace each monitor displays after login. An empty list means automatic: the primary monitor keeps the workspace that is currently active and every other monitor gets the next free one. Workspaces are zero-based indices as used everywhere else, so workspace 1 in the UI is index 0</description>
+    </key>
+
+    <!-- Which workspace a given application is placed on when it opens -->
+    <key name="app-workspace-map" type="s">
+      <default>'[]'</default>
+      <summary>Workspace per application at startup</summary>
+      <description>JSON array of {"wmClass":"NAME","workspace":N,"scope":"startup|always","maximize":BOOL} entries. A window whose WM_CLASS matches is moved to that workspace without ever activating it, so the view never jumps, and maximized right after the move when the rule says so. scope 'startup' only applies within the first 30 seconds after login, which covers autostarted apps and nothing else; scope 'always' applies every time the app opens. 'maximize' is optional and falls back to the maximize-app-windows default. Workspaces are zero-based indices, so workspace 1 in the UI is index 0. An empty list disables the feature</description>
+    </key>
+
+    <!-- Default for whether a window placed by an app rule opens maximized -->
+    <key name="maximize-app-windows" type="b">
+      <default>false</default>
+      <summary>Default for new application rules: open maximized</summary>
+      <description>Whether a newly added app-workspace-map rule gets 'maximize' set. A rule without its own 'maximize' field follows this value, a rule that sets it ignores this value. Windows are only ever maximized, never restored</description>
     </key>
 
     <!-- Cycle focus within current workspace -->
@@ -192,7 +234,7 @@
     <key name="mmw-warp-to-monitor-0" type="as">
       <default><![CDATA[[]]]></default>
       <summary>Warp pointer to monitor 1</summary>
-      <description>Keybinding to warp pointer to the center of monitor 1 (leftmost)</description>
+      <description>Keybinding to warp pointer to the center of monitor 1</description>
     </key>
 
     <key name="mmw-warp-to-monitor-1" type="as">
@@ -235,6 +277,56 @@
       <default><![CDATA[[]]]></default>
       <summary>Warp pointer to monitor 8</summary>
       <description>Keybinding to warp pointer to the center of monitor 8</description>
+    </key>
+
+    <!-- Relative monitor navigation: warp pointer and focus to the neighbour -->
+    <key name="mmw-warp-to-adjacent-left" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp to the monitor on the left</summary>
+      <description>Keybinding to move the pointer and focus to the neighbouring monitor to the left</description>
+    </key>
+
+    <key name="mmw-warp-to-adjacent-right" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp to the monitor on the right</summary>
+      <description>Keybinding to move the pointer and focus to the neighbouring monitor to the right</description>
+    </key>
+
+    <key name="mmw-warp-to-adjacent-up" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp to the monitor above</summary>
+      <description>Keybinding to move the pointer and focus to the neighbouring monitor above</description>
+    </key>
+
+    <key name="mmw-warp-to-adjacent-down" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Warp to the monitor below</summary>
+      <description>Keybinding to move the pointer and focus to the neighbouring monitor below</description>
+    </key>
+
+    <!-- Relative monitor navigation: move focused window to the neighbour's workspace -->
+    <key name="mmw-move-window-to-adjacent-left" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Move window to the workspace on the monitor left</summary>
+      <description>Keybinding to move the focused window to the workspace displayed on the neighbouring monitor to the left</description>
+    </key>
+
+    <key name="mmw-move-window-to-adjacent-right" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Move window to the workspace on the monitor right</summary>
+      <description>Keybinding to move the focused window to the workspace displayed on the neighbouring monitor to the right</description>
+    </key>
+
+    <key name="mmw-move-window-to-adjacent-up" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Move window to the workspace on the monitor above</summary>
+      <description>Keybinding to move the focused window to the workspace displayed on the neighbouring monitor above</description>
+    </key>
+
+    <key name="mmw-move-window-to-adjacent-down" type="as">
+      <default><![CDATA[[]]]></default>
+      <summary>Move window to the workspace on the monitor below</summary>
+      <description>Keybinding to move the focused window to the workspace displayed on the neighbouring monitor below</description>
     </key>
 
     <!-- Window highlight settings -->

@@ -10,7 +10,8 @@ A GNOME Shell extension that enables independent workspace management for each m
 
 - **Independent Workspaces per Monitor**: Each monitor can display a different workspace simultaneously
 - **Workspace Swap**: When switching to a workspace already shown on another monitor, workspaces are swapped between monitors
-- **Per-Workspace Wallpapers**: Set different wallpapers for each workspace, with scaling and tiling options
+- **Per-Workspace Wallpapers**: Set different wallpapers for each workspace, with scaling and tiling options, optionally reusing the Bing wallpaper of a given day
+- **Per-App Startup Workspace**: Send a window of a chosen app to a chosen workspace without switching to it
 - **Workspace Indicator**: Shows current workspace number for each monitor in the top panel
 - **Popup Banner**: Brief notification when switching workspaces or displays
 - **Focus Management**: Automatically focuses windows under the pointer, with focus restoration on workspace switch
@@ -19,7 +20,10 @@ A GNOME Shell extension that enables independent workspace management for each m
 
 ## Supported Versions
 
-- GNOME Shell 45, 46, 47
+- GNOME Shell 45, 46, 47, 48, 49, 50
+
+Note: GNOME Shell 50 is Wayland-only, so the X11 shell-restart workflow below is
+not available there.
 
 ## Prerequisites
 
@@ -65,8 +69,9 @@ glib-compile-schemas ~/.local/share/gnome-shell/extensions/gnome-namakewm@namake
 ```
 
 4. Restart GNOME Shell
-   - **Wayland**: Log out and log back in
-   - **X11**: Press `Alt+F2`, type `r`, press `Enter` (see [Known Limitations](#known-limitations) if already enabled)
+   - **Wayland** (GNOME 45–49): Log out and log back in
+   - **X11** (GNOME 45–49): Press `Alt+F2`, type `r`, press `Enter` (see [Known Limitations](#known-limitations) if already enabled)
+   - **GNOME 50**: Wayland-only — log out and log back in
 
 5. Enable the extension
 
@@ -104,6 +109,78 @@ Open settings from the Extensions app, or run:
 ```bash
 gnome-extensions prefs gnome-namakewm@namake-taro.github.io
 ```
+
+### Workspaces & Apps Tab
+
+Both workspace assignment rules live in their own tab:
+
+- **Startup Workspace per Monitor** - which workspace each monitor shows after
+  login. `Auto` gives the primary monitor the currently active workspace and the
+  other monitors the next free ones; two monitors can never share a workspace.
+- **Startup App on Workspace** - described below.
+### Startup App on Workspace
+
+Sends a window of a chosen application to a chosen workspace **without ever
+switching to it** - the view stays exactly where you are, the window simply
+waits on the other workspace until you go there. This is meant for autostarted
+apps, which otherwise all end up on the workspace that happens to be active at
+login (usually WS1).
+
+Each rule has a scope:
+
+| Scope | Behaviour |
+|-------|-----------|
+| **Only at startup** | Applies within the first 30 seconds after login, which covers autostarted apps and nothing else. |
+| **Always** | Applies every time the app opens. |
+
+**Open Maximized** is a switch per rule: that app's window is maximized right
+after the move, so it fills the monitor it landed on. **Maximize by Default**
+above the rule list is what a newly added rule starts with - a rule that carries
+its own answer ignores it, so existing rules can be flipped en masse by changing
+the default and individually overruled afterwards. Maximizing only ever adds: a
+window you maximized yourself is never touched, an app that refuses to be
+maximized is left as it is, and switching the option off restores nothing.
+
+A rule sets the workspace and nothing else. It never activates the window -
+activating a window also activates its workspace, which is exactly what the rule
+is meant to avoid. The window does move to the monitor that *shows* the target
+workspace, because a workspace number on its own means nothing without the
+per-monitor assignment: with workspacing mode "primary only" Mutter only binds
+the primary monitor's windows to the active workspace, every window on a
+secondary monitor is sticky and visible on whichever workspace is active. So a
+rule for WS3 on a setup where M0 shows WS3 puts the window on M0, right next to
+the windows already living in that workspace. A workspace that no monitor shows
+has nowhere to go and falls back to the primary, where the window waits for you
+to switch to that workspace.
+
+Picking the application opens a searchable list of everything installed, the
+way Auto Move Windows does it: type a few letters, the best match is
+pre-selected, Enter takes it. Icons and display names come from the desktop
+entries, and a search also matches the raw WM_CLASS, so both `naut` and
+`org.gnome.Nautilus` find Files. Something that matches no installed app can be
+entered as WM_CLASS as it is - that is the way to cover a Wine window or an app
+that is only started at login.
+
+Where the WM_CLASS comes from:
+
+- **Declared**: the `StartupWMClass` of the `.desktop` file, which is what
+  Firefox and most older apps ship. These entries say so in the list.
+- **Guessed**: the desktop file id (`org.gnome.Nautilus.desktop` becomes
+  `org.gnome.Nautilus`). Only a handful of apps declare `StartupWMClass`, so
+  this is what most entries use, and it is what a `GApplication`-based app -
+  i.e. every modern GNOME app - reports as its WM_CLASS. Guessed entries are
+  marked as such in the list.
+
+Matching is case-insensitive, and a rule for `org.gnome.Nautilus` also matches a
+window that reports the bare `nautilus`, so a wrong guess about the id does not
+silently do nothing.
+
+Each window is moved at most once. If you move it somewhere else yourself
+afterwards, it stays there.
+
+This overlaps with [Auto Move Windows](https://extensions.gnome.org/extension/4312/):
+if both are active they will both move the same window and the last one to act
+wins. Disable one of them.
 
 ### Behavior Settings
 
@@ -154,7 +231,9 @@ When a workspace has no assigned wallpaper, the system wallpaper is displayed.
 
 ### GNOME Shell Restart (Alt+F2 → r)
 
-When restarting GNOME Shell using `Alt+F2` → `r` (X11 only), windows on secondary monitors may not be restored correctly. This is because the extension's `disable()` function is not called before the shell restarts.
+When restarting GNOME Shell using `Alt+F2` → `r` (X11 only, so GNOME 45–49), windows on secondary monitors may not be restored correctly. This is because the extension's `disable()` function is not called before the shell restarts.
+
+This does not apply to GNOME 50, which dropped X11 session support entirely.
 
 **Workaround**: Before restarting GNOME Shell, disable the extension first:
 

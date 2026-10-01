@@ -2,8 +2,8 @@
   "uuid": "gnome-namakewm@namake-taro.github.io",
   "name": "NamakeWM",
   "description": "Namake Window Manager - Allows each monitor to have an independent workspace assignment with swap functionality (Spectrwm/Herbstluftwm style)",
-  "shell-version": ["45", "46", "47"],
-  "version": 52,
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "version": 53,
   "settings-schema": "org.gnome.shell.extensions.gnome-namakewm",
   "url": "https://github.com/namake-taro/gnome-namakewm"
 }
